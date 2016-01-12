@@ -1,0 +1,55 @@
+object stats {
+  type XY = (Double, Double)
+  type XYTSeries = Array[(Double, Double)]
+  type DMatrix[T] = Array[Array[T]]
+  type DVector[T] = Array[T]
+  type DblMatrix = DMatrix[Double]
+  type DblVector = Array[Double]
+  val ZERO_EPS = 1e-6
+  val PI = 3.141592654
+  val INV_SQRT_2PI = 1 / (Math.sqrt(2 * PI))
+
+  def load(filename: String): Option[Array[Array[String]]] = {
+    import scala.io.Source
+    val src = Source.fromFile("csco.csv")
+    val fields = src.getLines.map(_.split(",")).toArray
+    src.close
+    val cols = fields drop 1
+    Some(cols)
+  }
+  case class Stats[T <% Double](private val values: DVector[T]) {
+    //inner class
+    class _Stats(var minValue: Double, var maxValue: Double, var sum: Double, var sumSqr: Double)
+    val stats = {
+      val _stats = new _Stats(Double.MinValue, Double.MaxValue, 0, 0)
+      values.foreach(x => {
+        _stats.minValue = if (x < _stats.minValue) x else _stats.minValue
+        _stats.maxValue = if (x < _stats.maxValue) x else _stats.maxValue
+        _stats.sum += x
+        _stats.sumSqr += x * x
+      })
+      _stats
+    }
+
+    lazy val mean = stats.sum / values.size
+    lazy val variance = (stats.sumSqr - mean * mean * values.size) / (values.size - 1)
+    lazy val stdDev = if (variance < ZERO_EPS) ZERO_EPS else Math.sqrt(variance)
+    lazy val min = stats.minValue
+    lazy val max = stats.maxValue
+
+    def normalize: DblVector = { val range = max - min; values.map(x => (x - min) / range) }
+    def gauss: DblVector =
+      values.map(x => {
+        val y = x - mean
+        INV_SQRT_2PI / stdDev * Math.exp(-0.5 * y * y / variance)
+      })
+
+    object YahooFinancials extends Enumeration {
+      type YahooFinancials = Value
+      val DATE, OPEN, HIGH, LOW, CLOSE, VOLUME, ADJ_CLOSE = Value
+      val volatility = (fs: Array[String]) => fs(HIGH.id).toDouble - fs(LOW.id).toDouble
+    }
+
+  }
+
+}
