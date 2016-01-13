@@ -1,4 +1,5 @@
-object stats {
+object MLDriver extends App {
+
   type XY = (Double, Double)
   type XYTSeries = Array[(Double, Double)]
   type DMatrix[T] = Array[Array[T]]
@@ -9,22 +10,27 @@ object stats {
   val PI = 3.141592654
   val INV_SQRT_2PI = 1 / (Math.sqrt(2 * PI))
 
-  def load(filename: String): Option[Array[Array[String]]] = {
+  def load(filename: String): Option[XYTSeries] = {
     import scala.io.Source
-    val src = Source.fromFile("csco.csv")
+    val src = Source.fromFile(filename)
     val fields = src.getLines.map(_.split(",")).toArray
     src.close
     val cols = fields drop 1
-    Some(cols)
+    val data = transform(cols)
+    Some(data)
   }
+
   case class Stats[T <% Double](private val values: DVector[T]) {
+
     //inner class
     class _Stats(var minValue: Double, var maxValue: Double, var sum: Double, var sumSqr: Double)
+
     val stats = {
-      val _stats = new _Stats(Double.MinValue, Double.MaxValue, 0, 0)
+      //It's a trick to initialize max/min to minValue/maxValue, so that in the foreach function it can have the real min/max from the array
+      val _stats = new _Stats(Double.MaxValue, Double.MinValue, 0, 0)
       values.foreach(x => {
         _stats.minValue = if (x < _stats.minValue) x else _stats.minValue
-        _stats.maxValue = if (x < _stats.maxValue) x else _stats.maxValue
+        _stats.maxValue = if (x > _stats.maxValue) x else _stats.maxValue
         _stats.sum += x
         _stats.sumSqr += x * x
       })
@@ -37,19 +43,40 @@ object stats {
     lazy val min = stats.minValue
     lazy val max = stats.maxValue
 
-    def normalize: DblVector = { val range = max - min; values.map(x => (x - min) / range) }
+    def normalize: DblVector = {
+      val range = max - min;
+      values.map(x => (x - min) / range)
+    }
+
     def gauss: DblVector =
       values.map(x => {
         val y = x - mean
         INV_SQRT_2PI / stdDev * Math.exp(-0.5 * y * y / variance)
       })
-
-    object YahooFinancials extends Enumeration {
-      type YahooFinancials = Value
-      val DATE, OPEN, HIGH, LOW, CLOSE, VOLUME, ADJ_CLOSE = Value
-      val volatility = (fs: Array[String]) => fs(HIGH.id).toDouble - fs(LOW.id).toDouble
-    }
-
   }
 
+  object YahooFinancials extends Enumeration {
+    type YahooFinancials = Value
+    val DATE, OPEN, HIGH, LOW, CLOSE, VOLUME, ADJ_CLOSE = Value
+    val volatilityF = (fs: Array[String]) => fs(HIGH.id).toDouble - fs(LOW.id).toDouble
+    val volumeF = (fs: Array[String]) => fs(VOLUME.id).toDouble
+  }
+
+  import YahooFinancials._
+
+  //Test Enumeration// YahooFinancials.values.foreach(x => println(x + "=" + x.id))
+
+  def transform(cols: Array[Array[String]]): XYTSeries = {
+    val volatility = Stats[Double](cols.map(YahooFinancials.volatilityF)).normalize
+    val volume = Stats[Double](cols.map(YahooFinancials.volumeF)).normalize
+    volatility zip volume
+  }
+
+  //start
+  def run = {
+    val d = load("E:\\csco.csv")
+    d.get.foreach { case (x, y) => println(x + ":" + y) }
+  }
+
+  run
 }
