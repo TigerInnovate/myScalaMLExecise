@@ -1,3 +1,12 @@
+package com.hiscala.ml.exercise
+
+
+import scala.util.{Try, Success, Failure}
+import scala.io.Source
+
+/**
+ * Created by Guanjun.Wang on 2016/1/12.
+ */
 object MLDriver extends App {
 
   type XY = (Double, Double)
@@ -22,26 +31,16 @@ object MLDriver extends App {
 
   case class Stats[T <% Double](private val values: DVector[T]) {
 
-    //inner class
-    class _Stats(var minValue: Double, var maxValue: Double, var sum: Double, var sumSqr: Double)
-
-    val stats = {
-      //It's a trick to initialize max/min to minValue/maxValue, so that in the foreach function it can have the real min/max from the array
-      val _stats = new _Stats(Double.MaxValue, Double.MinValue, 0, 0)
-      values.foreach(x => {
-        _stats.minValue = if (x < _stats.minValue) x else _stats.minValue
-        _stats.maxValue = if (x > _stats.maxValue) x else _stats.maxValue
-        _stats.sum += x
-        _stats.sumSqr += x * x
-      })
-      _stats
+    //tuple(min, max, sum, sumsqr, size)
+    val stats = values.foldLeft((Double.MaxValue, Double.MinValue, 0d, 0d, 0)) {
+      case (t, x) => (if (x < t._1) x else t._1, if (x > t._2) x else t._2, t._3 + x, t._4 + x * x, t._5 + 1)
     }
 
-    lazy val mean = stats.sum / values.size
-    lazy val variance = (stats.sumSqr - mean * mean * values.size) / (values.size - 1)
+    lazy val mean = stats._3 / stats._5 //stats.sum / values.size
+    lazy val variance = (stats._4 - mean * mean * stats._5) / (stats._5 - 1)
     lazy val stdDev = if (variance < ZERO_EPS) ZERO_EPS else Math.sqrt(variance)
-    lazy val min = stats.minValue
-    lazy val max = stats.maxValue
+    lazy val min = stats._1
+    lazy val max = stats._2
 
     def normalize: DblVector = {
       val range = max - min;
@@ -80,3 +79,4 @@ object MLDriver extends App {
 
   run
 }
+
